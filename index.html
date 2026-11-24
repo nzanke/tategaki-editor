@@ -118,6 +118,7 @@ dialog .note{font-size:12px;color:var(--sub)}
     <label>文字 <input id="fs" type="range" min="14" max="40" step="1"><span id="fsV" class="num"></span></label>
     <label>行間 <input id="lh" type="range" min="1.1" max="2.6" step="0.05"><span id="lhV" class="num"></span></label>
     <label><input id="grid" type="checkbox"> マス目</label>
+    <label>線 <select id="gw"><option value="1">細</option><option value="2">中</option><option value="3">太</option></select></label>
     <label><input id="ruler" type="checkbox"> ルーラー</label>
     <label>目盛り <select id="step"><option value="1">1</option><option value="5">5</option><option value="10">10</option></select></label>
     <label title="オフのときは12字ちょうどで折り返し、句読点も行頭に来ます"><input id="kinsoku" type="checkbox"> 禁則処理</label>
@@ -190,7 +191,7 @@ const LS = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
 const COLS = 12;
-const DEF = {font:'mincho', fs:22, lh:1.75, grid:true, ruler:true, step:5, kinsoku:false, pZen:true, pBlank:false, pIndent:false, ren:true};
+const DEF = {font:'mincho', fs:22, lh:1.75, grid:true, ruler:true, step:5, kinsoku:false, pZen:true, pBlank:false, pIndent:false, ren:true, gw:1};
 const S = Object.assign({}, DEF, LS.get('tg-settings', {}));
 const CFG = Object.assign({repo:'nzanke/tategaki-editor', path:'data/articles.json', token:''}, LS.get('tg-sync', {}));
 let A = LS.get('tg-articles', {});       // id -> {id,title,body,created,updated,deleted}
@@ -210,7 +211,7 @@ function applySettings(){
   $('fs').value = S.fs; $('fsV').textContent = S.fs + 'px';
   $('lh').value = S.lh; $('lhV').textContent = (+S.lh).toFixed(2);
   ['grid','ruler','kinsoku','pZen','pBlank','pIndent','ren'].forEach(k => $(k).checked = !!S[k]);
-  $('step').value = S.step;
+  $('step').value = S.step; $('gw').value = S.gw;
   $('stage').classList.toggle('noRuler', !S.ruler);
   $('edwrap').classList.toggle('kinsoku', !!S.kinsoku);
   $('edwrap').classList.toggle('plain', !S.ren);
@@ -222,7 +223,7 @@ function applySettings(){
   }
   if (S.grid){
     // 線は画面の1ドット幅（高解像度の画面では0.5px）で、ドットの境目に合わせてぼやけないように描く
-    const sw = 1 / Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const sw = (+S.gw || 1) / Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
     const x = Math.round((L - fs) / 2) + sw / 2, y = sw / 2;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${fs}" shape-rendering="crispEdges"><rect x="${x}" y="${y}" width="${fs}" height="${fs}" fill="none" stroke="#9bdaff" stroke-width="${sw}"/></svg>`;
     ed.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
@@ -586,6 +587,7 @@ $('fGo').onclick = () => { S.font = 'gothic'; applySettings(); };
 $('fs').oninput = e => { S.fs = +e.target.value; applySettings(); };
 $('lh').oninput = e => { S.lh = +e.target.value; applySettings(); };
 $('step').onchange = e => { S.step = +e.target.value; applySettings(); };
+$('gw').onchange = e => { S.gw = +e.target.value; applySettings(); };
 ['grid','ruler','kinsoku','pZen','pBlank','pIndent'].forEach(k => $(k).onchange = e => { S[k] = e.target.checked; applySettings(); });
 $('ren').onchange = e => {
   S.ren = e.target.checked;
