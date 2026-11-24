@@ -317,7 +317,8 @@ const PUA_RE = /[\uE000-\uF8FF]|[\u{F0000}-\u{FFFFD}]/u;
 const PUA_G = /[\uE000-\uF8FF]|[\u{F0000}-\u{FFFFD}]/gu;
 function renRev(){ const r = {}; if (RENMAP) for (const k in RENMAP) r[RENMAP[k]] = k; return r; }
 const fromAtok = s => { if (!RENMAP) return s; const r = renRev(); return s.replace(PUA_G, c => r[c.codePointAt(0)] ?? c); };
-const toAtok = s => RENMAP ? s.replace(TCY, m => RENMAP[m] != null ? String.fromCodePoint(RENMAP[m]) : m) : s;
+// 登録のある2桁はATOKの連数字に、連数字のない2桁（05など）は全角に
+const toAtok = s => RENMAP ? s.replace(TCY, m => RENMAP[m] != null ? String.fromCodePoint(RENMAP[m]) : [...m].map(zd).join('')) : s;
 function learnRen(text){
   const smp = {};
   const re = /([0-9０-９])([0-9０-９])[\s=＝:：、,［\[（(]*([\uE000-\uF8FF]|[\u{F0000}-\u{FFFFD}])/gu;
