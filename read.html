@@ -36,6 +36,22 @@ article h2{font-size:22px;margin:6px 0 6px;line-height:1.5}
 .body p.gap{height:1.95em}
 .back{display:inline-block;margin-bottom:12px;font-size:14px;color:var(--accent);text-decoration:none}
 .empty{color:var(--sub);text-align:center;padding:40px 0}
+.exp{display:flex;gap:6px;align-items:center;justify-content:flex-end;margin:0 0 12px;font-size:13px;color:var(--sub)}
+.exp button{font-family:var(--num);font-size:12px;border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;color:var(--ink)}
+.exp button:hover{border-color:#b9c2cf}
+.rowx{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+#printArea{display:none}
+@page{size:A4;margin:18mm 20mm}
+@media print{
+  header,main{display:none!important}
+  body{background:#fff}
+  #printArea{display:block}
+  #printArea article{border:0;padding:0;border-radius:0;break-after:page}
+  #printArea article:last-child{break-after:auto}
+  #printArea h2{font-size:16pt}
+  #printArea .body{font-size:11pt;line-height:1.9}
+  #printArea .tag{border:1px solid #9cb8e6}
+}
 </style>
 </head>
 <body>
@@ -44,6 +60,7 @@ article h2{font-size:22px;margin:6px 0 6px;line-height:1.5}
   <div id="cats"></div>
 </header>
 <main id="main"><div class="empty">読み込み中…</div></main>
+<div id="printArea"></div>
 <script>
 (() => {
 const REPO = 'nzanke/tategaki-editor', PATH = 'data/articles.json';
@@ -85,16 +102,53 @@ function renderCats(sel){
 }
 $('cats').addEventListener('click', e => { const b = e.target.closest('button'); if (b) location.hash = b.dataset.c; });
 
+/* ---------- 書き出し（横書き仕様：英数字は半角、改行は倍） ---------- */
+let CUR = {items: [], name: ''};
+const expBar = '<div class="exp">書き出し：<button data-x="txt">TXT</button><button data-x="md">MD</button><button data-x="pdf">PDF</button></div>';
+const yoko = a => toHan(a.body || '').replace(/\r/g, '').replace(/\n/g, '\n\n');
+const fname = s => (s || '無題').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 60);
+const mdEsc = line => line.replace(/^(\s*)([#>*+\-]|\d+\.)(?=\s|$)/, '$1\\$2');
+function toTxt(a){ return `${toHan(a.title || '無題')}\n${a.category ? a.category + '　' : ''}${fmt(a.updated)}\n\n${yoko(a)}\n`; }
+function toMd(a){
+  return `# ${toHan(a.title || '無題')}\n\n*${a.category ? a.category + '・' : ''}${fmt(a.updated)}*\n\n` +
+    yoko(a).split('\n').map(mdEsc).join('\n') + '\n';
+}
+function articleHTML(a){
+  const paras = yoko(a).split('\n').map(p => p.trim() === '' ? '<p class="gap"></p>' : `<p>${esc(p)}</p>`).join('');
+  return `<article><div class="meta">${a.category ? `<span class="tag">${esc(a.category)}</span>` : ''}${fmt(a.updated)}</div>
+    <h2>${esc(toHan(a.title || '無題'))}</h2><div class="body">${paras}</div></article>`;
+}
+function download(text, name, type){
+  const blob = new Blob([text], {type: type + ';charset=utf-8'});
+  const u = URL.createObjectURL(blob), l = document.createElement('a');
+  l.href = u; l.download = name; document.body.appendChild(l); l.click(); l.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 1000);
+}
+$('main').addEventListener('click', e => {
+  const b = e.target.closest('[data-x]'); if (!b) return;
+  const {items, name} = CUR; if (!items.length) return;
+  const x = b.dataset.x, sep = '\n\n' + '―'.repeat(20) + '\n\n';
+  if (x === 'txt') download(items.map(toTxt).join(sep), fname(name) + '.txt', 'text/plain');
+  else if (x === 'md') download(items.map(toMd).join('\n---\n\n'), fname(name) + '.md', 'text/markdown');
+  else {   // PDF：印刷の画面で「PDFに保存」を選ぶ
+    $('printArea').innerHTML = items.map(articleHTML).join('');
+    const t = document.title; document.title = fname(name);
+    window.print();
+    document.title = t;
+  }
+});
+
 function showList(cat){
   if (cat !== null && !CATS.includes(cat)) cat = null;
   renderCats(cat);
   const items = cat === null ? ART : ART.filter(a => (a.category || '') === cat);
-  $('main').innerHTML = items.length ? items.map(a => `
+  CUR = {items, name: cat === null ? 'すべての記事' : (cat || '未分類')};
+  $('main').innerHTML = (items.length ? `<div class="rowx"><span class="meta">${items.length}本</span>${expBar}</div>` : '') + (items.length ? items.map(a => `
     <a class="card" href="#a=${encodeURIComponent(a.id)}">
       <h2>${esc(toHan(a.title || '無題'))}</h2>
       <div class="meta">${a.category ? `<span class="tag">${esc(a.category)}</span>` : ''}${fmt(a.updated)}</div>
       <p>${esc(toHan((a.body || '').replace(/\s+/g, ' ').trim()).slice(0, 140))}</p>
-    </a>`).join('') : '<div class="empty">まだ記事がありません</div>';
+    </a>`).join('') : '<div class="empty">まだ記事がありません</div>');
   document.title = (cat === null ? '' : (cat || '未分類') + '｜') + '読む｜縦書きエディタ';
   window.scrollTo(0, 0);
 }
@@ -102,11 +156,9 @@ function showArticle(id){
   const a = ART.find(x => x.id === id);
   if (!a) return showList(null);
   renderCats(a.category || '');
-  const paras = toHan(a.body || '').replace(/\n/g, '\n\n').split('\n')   // 横書きでは改行を倍に
-   .map(p => p.trim() === '' ? '<p class="gap"></p>' : `<p>${esc(p)}</p>`).join('');
-  $('main').innerHTML = `<a class="back" href="#c=${esc(a.category || '')}">← ${esc(a.category || '未分類')}の一覧へ</a>
-    <article><div class="meta">${a.category ? `<span class="tag">${esc(a.category)}</span>` : ''}${fmt(a.updated)}</div>
-    <h2>${esc(toHan(a.title || '無題'))}</h2><div class="body">${paras}</div></article>`;
+  CUR = {items: [a], name: a.title || '無題'};
+  $('main').innerHTML = `<div class="rowx"><a class="back" href="#c=${esc(a.category || '')}">← ${esc(a.category || '未分類')}の一覧へ</a>${expBar}</div>
+    ${articleHTML(a)}`;
   document.title = (a.title || '無題') + '｜読む';
   window.scrollTo(0, 0);
 }
