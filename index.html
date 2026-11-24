@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>縦書きエディタ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDGothic:wght@400;700&family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDMincho&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:"UD英数";src:url(lib/fonts/biz-udgothic-latin-400-normal.woff2) format("woff2");font-weight:400;font-display:swap;unicode-range:U+0020-007E,U+00A0-00FF}
+@font-face{font-family:"UD英数";src:url(lib/fonts/biz-udgothic-latin-700-normal.woff2) format("woff2");font-weight:700;font-display:swap;unicode-range:U+0020-007E,U+00A0-00FF}
+:root{
+  --ui:"UD英数","BIZ UDPGothic","Hiragino Sans",system-ui,sans-serif;
+  --num:"UD英数","BIZ UDGothic",ui-monospace,monospace;
+  --bg:#f6f7f9;--paper:#fff;--ink:#222;--sub:#6b7280;--line:#e2e5ea;--accent:#2f6fd6;--grid:#a9c9ee;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--ui);background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
+button,input,select{font-family:inherit;font-size:14px}
+button{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:6px;padding:6px 12px;color:var(--ink)}
+button:hover{border-color:#b9c2cf}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+button.on{background:#e8f0fc;border-color:var(--accent);color:var(--accent);font-weight:700}
+header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:15px;margin:0 8px 0 0;white-space:nowrap}
+.tabs{display:flex;gap:4px}
+.spacer{flex:1}
+#status{font-size:12px;color:var(--sub);white-space:nowrap}
+#status.err{color:#c0392b}
+.toolbar{display:flex;align-items:center;gap:14px;padding:6px 12px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap;font-size:13px}
+.toolbar label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.toolbar input[type=range]{width:90px}
+.num{font-family:var(--num)}
+.group{display:flex;gap:2px}
+.group button{padding:4px 10px;font-size:13px}
+#titleRow{display:flex;gap:8px;align-items:center;padding:10px 12px 0}
+#title{flex:1;font-size:18px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#fff}
+#count{font-size:13px;color:var(--sub);white-space:nowrap}
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+#writeView{flex:1;min-height:0;display:flex;flex-direction:column}
+.stage{flex:1;min-height:0;display:flex;margin:10px 12px 12px;background:var(--paper);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#scroller{flex:1;overflow-x:auto;overflow-y:auto;direction:rtl}
+#inner{direction:ltr;display:inline-block;min-width:100%}
+#lineRuler{position:relative;height:22px;border-bottom:1px solid var(--line);font-family:var(--num);font-size:11px;color:var(--sub)}
+#lineRuler span{position:absolute;top:4px;transform:translateX(50%);white-space:nowrap}
+#lineRuler span.major{color:var(--accent);font-weight:700}
+#charRuler{position:relative;width:30px;border-left:1px solid var(--line);font-family:var(--num);font-size:11px;color:var(--sub);flex:none}
+#charRuler span{position:absolute;left:0;right:0;text-align:center;transform:translateY(-50%)}
+#charRuler span.major{color:var(--accent);font-weight:700}
+#charRuler i{position:absolute;right:0;width:6px;border-top:1px solid #c7ced8}
+.noRuler #lineRuler,.noRuler #charRuler{display:none}
+#ed{
+  display:block;writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;
+  border:0;outline:0;resize:none;overflow:hidden;margin:0;
+  padding:16px 18px;background-color:transparent;color:var(--ink);
+  background-repeat:repeat;background-origin:content-box;background-clip:content-box;background-position:right top;
+  letter-spacing:0;font-kerning:none;font-feature-settings:normal;white-space:pre-wrap;word-break:break-all;line-break:anywhere;overflow-wrap:anywhere;
+}
+#ed.kinsoku{line-break:strict;word-break:normal;overflow-wrap:normal}
+.mincho #ed{font-family:"BIZ UDMincho",serif}
+.gothic #ed{font-family:"BIZ UDGothic",sans-serif}
+#historyView{flex:1;overflow:auto;padding:12px;display:none}
+.hbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.hbar input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:6px}
+.item{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.item .main{flex:1;min-width:0;cursor:pointer}
+.item .t{font-weight:700;font-size:15px;margin-bottom:3px}
+.item .m{font-size:12px;color:var(--sub);font-family:var(--num)}
+.item .p{font-size:13px;color:#444;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item.cur{border-color:var(--accent)}
+.empty{color:var(--sub);text-align:center;padding:40px}
+dialog{border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:560px;width:92vw}
+dialog h2{font-size:16px;margin:0 0 10px}
+dialog label{display:block;font-size:13px;margin:10px 0 4px;color:#333}
+dialog input[type=text],dialog input[type=password]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-family:var(--num)}
+dialog ol{font-size:13px;line-height:1.7;padding-left:20px;color:#333}
+dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+dialog .note{font-size:12px;color:var(--sub)}
+</style>
+</head>
+<body class="mincho">
+<header>
+  <h1>縦書きエディタ</h1>
+  <div class="tabs">
+    <button id="tabWrite" class="on">書く</button>
+    <button id="tabHistory">履歴</button>
+  </div>
+  <button id="btnNew">新規</button>
+  <button id="btnSave" class="primary" title="Ctrl+S でも保存">保存</button>
+  <span id="status"></span>
+  <span class="spacer"></span>
+  <button id="btnTxt" title="テキストファイルで書き出す">.txt</button>
+  <button id="btnSettings">同期の設定</button>
+</header>
+
+<main>
+<section id="writeView">
+  <div class="toolbar">
+    <div class="group"><button id="fMin" class="on">明朝</button><button id="fGo">ゴシック</button></div>
+    <label>文字 <input id="fs" type="range" min="14" max="40" step="1"><span id="fsV" class="num"></span></label>
+    <label>行間 <input id="lh" type="range" min="1.1" max="2.6" step="0.05"><span id="lhV" class="num"></span></label>
+    <label><input id="grid" type="checkbox"> マス目</label>
+    <label><input id="ruler" type="checkbox"> ルーラー</label>
+    <label>目盛り <select id="step"><option value="1">1</option><option value="5">5</option><option value="10">10</option></select></label>
+    <label title="オフのときは12字ちょうどで折り返し、句読点も行頭に来ます"><input id="kinsoku" type="checkbox"> 禁則処理</label>
+    <label title="貼り付け時に半角英数を全角にします"><input id="pZen" type="checkbox"> 貼付時に全角化</label>
+    <label title="貼り付け時に空行を詰めます"><input id="pBlank" type="checkbox"> 空行を詰める</label>
+    <label title="貼り付け時に段落の頭を一字下げます"><input id="pIndent" type="checkbox"> 段落頭を下げる</label>
+    <button id="btnZen" title="本文の半角英数をすべて全角にする">本文を全角化</button>
+  </div>
+  <div id="titleRow">
+    <input id="title" type="text" placeholder="タイトル">
+    <span id="count" class="num"></span>
+  </div>
+  <div class="stage" id="stage">
+    <div id="scroller"><div id="inner"><div id="lineRuler"></div><textarea id="ed" spellcheck="false" placeholder="ここに本文"></textarea></div></div>
+    <div id="charRuler"></div>
+  </div>
+</section>
+
+<section id="historyView">
+  <div class="hbar"><input id="q" type="search" placeholder="タイトル・本文を検索"><button id="btnSync">同期</button></div>
+  <div id="list"></div>
+</section>
+</main>
+
+<dialog id="dlg">
+  <h2>複数のPCで共有する（GitHub同期）</h2>
+  <p class="note">記事は下のリポジトリの JSON ファイルに保存されます。トークンは各PCで最初の1回だけ入力します（このPCのブラウザにだけ保存されます）。トークンがなくても、このPCの中には保存されます。</p>
+  <ol>
+    <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub の Fine-grained token 作成ページ</a>を開く</li>
+    <li>Token name に「縦書きエディタ」、Expiration は好みで（No expiration も可）</li>
+    <li>Repository access で「Only select repositories」→ <b>tategaki-editor</b> を選ぶ</li>
+    <li>Permissions の Repository permissions で <b>Contents</b> を「Read and write」にする</li>
+    <li>「Generate token」を押し、出てきた文字列を下に貼る</li>
+  </ol>
+  <label>トークン</label><input id="sToken" type="password" placeholder="github_pat_…">
+  <label>リポジトリ</label><input id="sRepo" type="text">
+  <label>保存ファイル</label><input id="sPath" type="text">
+  <div class="row">
+    <button id="sForget">このPCのトークンを消す</button>
+    <span class="spacer"></span>
+    <button id="sClose">閉じる</button>
+    <button id="sOk" class="primary">保存して同期</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const COLS = 12;
+const DEF = {font:'mincho', fs:22, lh:1.75, grid:true, ruler:true, step:5, kinsoku:false, pZen:true, pBlank:false, pIndent:false};
+const S = Object.assign({}, DEF, LS.get('tg-settings', {}));
+const CFG = Object.assign({repo:'nzanke/tategaki-editor', path:'data/articles.json', token:''}, LS.get('tg-sync', {}));
+let A = LS.get('tg-articles', {});       // id -> {id,title,body,created,updated,deleted}
+let cur = LS.get('tg-current', null);    // 編集中の記事 id
+let dirty = false;
+
+const ed = $('ed'), title = $('title');
+
+/* ---------- 表示設定 ---------- */
+function applySettings(){
+  document.body.classList.toggle('mincho', S.font === 'mincho');
+  document.body.classList.toggle('gothic', S.font === 'gothic');
+  $('fMin').classList.toggle('on', S.font === 'mincho');
+  $('fGo').classList.toggle('on', S.font === 'gothic');
+  $('fs').value = S.fs; $('fsV').textContent = S.fs + 'px';
+  $('lh').value = S.lh; $('lhV').textContent = (+S.lh).toFixed(2);
+  ['grid','ruler','kinsoku','pZen','pBlank','pIndent'].forEach(k => $(k).checked = !!S[k]);
+  $('step').value = S.step;
+  $('stage').classList.toggle('noRuler', !S.ruler);
+  ed.classList.toggle('kinsoku', !!S.kinsoku);
+  const fs = S.fs, L = Math.round(fs * S.lh);
+  ed.style.fontSize = fs + 'px';
+  ed.style.lineHeight = L + 'px';
+  ed.style.height = (16 + 16 + COLS * fs) + 'px';
+  if (S.grid){
+    const x = ((L - fs) / 2).toFixed(2);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${fs}"><rect x="${x}" y="0.5" width="${fs}" height="${fs}" fill="none" stroke="#a9c9ee" stroke-width="1"/></svg>`;
+    ed.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    ed.style.backgroundSize = `${L}px ${fs}px`;
+  } else ed.style.backgroundImage = 'none';
+  LS.set('tg-settings', S);
+  layout();
+}
+
+/* ---------- 幅の自動調整とルーラー ---------- */
+function layout(){
+  const fs = S.fs, L = Math.round(fs * S.lh), pad = 18;
+  const sc = $('scroller');
+  const minW = sc.clientWidth;
+  const fit = Math.max(1, Math.floor((minW - pad * 2) / L));
+  const n = countText(ed.value).lines;
+  const used = S.kinsoku ? Math.ceil(n * 1.1) + 1 : n;   // 禁則ありは追い出しで行が増える分の余裕
+  const w = Math.max(fit, used + 2) * L + pad * 2;       // 書き足し用に2行ぶん余白
+  ed.style.width = w + 'px';
+  $('inner').style.width = w + 'px';
+  if (!S.ruler) return;
+  // 行番号（右から）
+  const cols = Math.floor((w - pad * 2) / L);
+  const step = +S.step;
+  let h = '';
+  for (let k = 1; k <= cols; k++){
+    if (step === 1 || k % step === 0 || k === 1){
+      const right = pad + (k - 0.5) * L;
+      h += `<span class="${k % 10 === 0 ? 'major' : ''}" style="right:${right}px">${k}</span>`;
+    }
+  }
+  $('lineRuler').innerHTML = h;
+  // 字数目盛り（上から）
+  const top = 22 + 1 + 16;
+  let c = '';
+  for (let i = 1; i <= COLS; i++){
+    const y = top + (i - 0.5) * fs;
+    c += `<i style="top:${top + i * fs}px"></i>`;
+    if (step === 1 || i % step === 0 || i === 1) c += `<span class="${i % 5 === 0 ? 'major' : ''}" style="top:${y}px">${i}</span>`;
+  }
+  $('charRuler').innerHTML = c;
+}
+
+/* ---------- 字数・行数 ---------- */
+function countText(s){
+  const paras = s.split('\n');
+  let lines = 0, chars = 0;
+  for (const p of paras){ const n = [...p].length; chars += n; lines += Math.max(1, Math.ceil(n / COLS)); }
+  if (s === '') lines = 0;
+  return {lines, chars};
+}
+function updateCount(){
+  const {lines, chars} = countText(ed.value);
+  $('count').textContent = `${COLS}字×${lines}行（${chars}字）`;
+}
+
+/* ---------- 貼り付け ---------- */
+const toZen = s => s.replace(/[!-~]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0)).replace(/ /g, '　');
+ed.addEventListener('paste', e => {
+  const t = (e.clipboardData || window.clipboardData).getData('text/plain');
+  if (t == null) return;
+  e.preventDefault();
+  let s = t.replace(/\r\n?/g, '\n').replace(/[ \t ]+$/gm, '');
+  if (S.pBlank) s = s.replace(/\n[ \t　]*\n+/g, '\n');
+  if (S.pZen) s = toZen(s);
+  if (S.pIndent) s = s.split('\n').map(p => (p === '' || /^[　「『（〈《【〔"“]/.test(p)) ? p : '　' + p.replace(/^[ \t]+/, '')).join('\n');
+  ed.setRangeText(s, ed.selectionStart, ed.selectionEnd, 'end');
+  onInput();
+});
+
+/* ---------- 入力 ---------- */
+let draftTimer;
+function onInput(){
+  dirty = true; setStatus('未保存');
+  updateCount(); layout(); followCaret();
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => LS.set('tg-draft', {id:cur, title:title.value, body:ed.value}), 400);
+}
+function followCaret(){
+  const sc = $('scroller');
+  if (sc.scrollWidth > sc.clientWidth && ed.selectionEnd >= ed.value.length - 1) sc.scrollLeft = -sc.scrollWidth;
+}
+ed.addEventListener('input', onInput);
+title.addEventListener('input', () => { dirty = true; setStatus('未保存'); LS.set('tg-draft', {id:cur, title:title.value, body:ed.value}); });
+
+/* ---------- 保存・同期 ---------- */
+function setStatus(t, err){ const s = $('status'); s.textContent = t; s.classList.toggle('err', !!err); }
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function saveLocal(){ LS.set('tg-articles', A); LS.set('tg-current', cur); }
+
+async function save(){
+  const now = new Date().toISOString();
+  if (!cur || !A[cur]) { cur = newId(); A[cur] = {id:cur, created:now}; }
+  A[cur].title = title.value.trim();
+  A[cur].body = ed.value;
+  A[cur].updated = now;
+  delete A[cur].deleted;
+  saveLocal(); localStorage.removeItem('tg-draft');
+  dirty = false;
+  if (!CFG.token){ setStatus('このPCに保存しました（同期は未設定）'); return; }
+  setStatus('保存中…');
+  try { await push(); setStatus('保存・同期しました ' + now.slice(11, 16).replace(/^(\d\d)/, h => String((+h + 9) % 24).padStart(2, '0'))); }
+  catch(e){ setStatus('このPCには保存済み／同期に失敗：' + e.message, true); }
+}
+
+const b64enc = s => { const b = new TextEncoder().encode(s); let out = ''; for (let i = 0; i < b.length; i += 0x8000) out += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(out); };
+const b64dec = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
+function api(path, opt = {}){
+  const h = {'Accept':'application/vnd.github+json'};
+  if (CFG.token) h.Authorization = 'Bearer ' + CFG.token;
+  if (opt.body) h['Content-Type'] = 'application/json';
+  return fetch(`https://api.github.com/repos/${CFG.repo}/contents/${CFG.path}` + (path || ''), Object.assign({headers:h, cache:'no-store'}, opt));
+}
+async function fetchRemote(){
+  const r = await api('?t=' + Date.now());
+  if (r.status === 404) return {data:{}, sha:null};
+  if (!r.ok) throw new Error('読み込み ' + r.status);
+  const j = await r.json();
+  let data = {};
+  try { data = JSON.parse(b64dec(j.content)).articles || {}; } catch(e){}
+  return {data, sha:j.sha};
+}
+function merge(remote){
+  let changed = false;
+  for (const id in remote){
+    const r = remote[id], l = A[id];
+    if (!l || (r.updated || '') > (l.updated || '')) { A[id] = r; changed = true; }
+  }
+  return changed;
+}
+async function pull(){
+  try {
+    const {data} = await fetchRemote();
+    if (merge(data)) { saveLocal(); if (cur && A[cur] && !dirty) loadArticle(cur, true); }
+    return true;
+  } catch(e){ setStatus('同期できませんでした：' + e.message, true); return false; }
+}
+async function push(){
+  for (let i = 0; i < 3; i++){
+    const {data, sha} = await fetchRemote();
+    merge(data); saveLocal();
+    const body = JSON.stringify({articles:A}, null, 1);
+    const r = await api('', {method:'PUT', body:JSON.stringify({message:'記事を保存', content:b64enc(body), sha:sha || undefined})});
+    if (r.ok) return;
+    if (r.status === 409 || r.status === 422) continue;   // 別のPCと同時に保存した → 取り直して再試行
+    if (r.status === 401 || r.status === 403) throw new Error('トークンが無効か、権限が足りません');
+    throw new Error('書き込み ' + r.status);
+  }
+  throw new Error('競合が解消できませんでした');
+}
+
+/* ---------- 記事の読み込み ---------- */
+function loadArticle(id, quiet){
+  const a = A[id]; if (!a) return;
+  cur = id; title.value = a.title || ''; ed.value = a.body || '';
+  dirty = false; LS.set('tg-current', cur);
+  updateCount(); layout(); $('scroller').scrollLeft = 0;
+  if (!quiet) setStatus('「' + (a.title || '無題') + '」を開きました');
+}
+function newArticle(){
+  if (dirty && !confirm('保存していない変更があります。破棄して新規にしますか？')) return;
+  cur = null; title.value = ''; ed.value = ''; dirty = false;
+  LS.set('tg-current', null); localStorage.removeItem('tg-draft');
+  updateCount(); layout(); setStatus('新規'); showWrite(); title.focus();
+}
+
+/* ---------- 履歴 ---------- */
+const fmt = iso => { if (!iso) return ''; const d = new Date(iso); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function renderList(){
+  const q = $('q').value.trim();
+  const items = Object.values(A).filter(a => !a.deleted)
+    .filter(a => !q || (a.title || '').includes(q) || (a.body || '').includes(q))
+    .sort((x, y) => (y.updated || '').localeCompare(x.updated || ''));
+  if (!items.length){ $('list').innerHTML = `<div class="empty">${q ? '見つかりません' : 'まだ保存した記事がありません'}</div>`; return; }
+  $('list').innerHTML = items.map(a => {
+    const {lines, chars} = countText(a.body || '');
+    return `<div class="item${a.id === cur ? ' cur' : ''}" data-id="${a.id}">
+      <div class="main"><div class="t">${esc(a.title || '無題')}</div>
+      <div class="m">${fmt(a.updated)}　${COLS}字×${lines}行（${chars}字）</div>
+      <div class="p">${esc((a.body || '').replace(/\n/g, ' ').slice(0, 80))}</div></div>
+      <button data-del="${a.id}">削除</button></div>`;
+  }).join('');
+}
+$('list').addEventListener('click', async e => {
+  const del = e.target.closest('[data-del]');
+  if (del){
+    const a = A[del.dataset.del];
+    if (!confirm('「' + (a.title || '無題') + '」を削除しますか？')) return;
+    a.deleted = true; a.body = ''; a.updated = new Date().toISOString();
+    if (cur === a.id) { cur = null; title.value = ''; ed.value = ''; updateCount(); }
+    saveLocal(); renderList();
+    if (CFG.token) try { await push(); setStatus('削除しました'); } catch(err){ setStatus('同期に失敗：' + err.message, true); }
+    return;
+  }
+  const it = e.target.closest('.item');
+  if (it){
+    if (dirty && it.dataset.id !== cur && !confirm('保存していない変更があります。破棄して開きますか？')) return;
+    loadArticle(it.dataset.id); showWrite();
+  }
+});
+$('q').addEventListener('input', renderList);
+$('btnSync').onclick = async () => { setStatus('同期中…'); if (await pull()) setStatus('同期しました'); renderList(); };
+
+function showWrite(){ $('writeView').style.display = ''; $('historyView').style.display = 'none'; $('tabWrite').classList.add('on'); $('tabHistory').classList.remove('on'); layout(); }
+async function showHistory(){
+  $('writeView').style.display = 'none'; $('historyView').style.display = 'block';
+  $('tabHistory').classList.add('on'); $('tabWrite').classList.remove('on');
+  renderList(); await pull(); renderList();
+}
+$('tabWrite').onclick = showWrite;
+$('tabHistory').onclick = showHistory;
+$('btnNew').onclick = newArticle;
+$('btnSave').onclick = save;
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's'){ e.preventDefault(); save(); } });
+window.addEventListener('beforeunload', e => { if (dirty){ e.preventDefault(); e.returnValue = ''; } });
+$('btnTxt').onclick = () => {
+  const name = (title.value.trim() || '無題').replace(/[\\/:*?"<>|]/g, '_') + '.txt';
+  const blob = new Blob([(title.value ? title.value + '\n\n' : '') + ed.value], {type:'text/plain;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+};
+$('btnZen').onclick = () => { ed.value = toZen(ed.value); onInput(); };
+
+/* ---------- ツールバー ---------- */
+$('fMin').onclick = () => { S.font = 'mincho'; applySettings(); };
+$('fGo').onclick = () => { S.font = 'gothic'; applySettings(); };
+$('fs').oninput = e => { S.fs = +e.target.value; applySettings(); };
+$('lh').oninput = e => { S.lh = +e.target.value; applySettings(); };
+$('step').onchange = e => { S.step = +e.target.value; applySettings(); };
+['grid','ruler','kinsoku','pZen','pBlank','pIndent'].forEach(k => $(k).onchange = e => { S[k] = e.target.checked; applySettings(); });
+window.addEventListener('resize', layout);
+if (document.fonts) document.fonts.ready.then(layout);
+
+/* ---------- 同期設定 ---------- */
+const dlg = $('dlg');
+$('btnSettings').onclick = () => { $('sToken').value = CFG.token; $('sRepo').value = CFG.repo; $('sPath').value = CFG.path; dlg.showModal(); };
+$('sClose').onclick = () => dlg.close();
+$('sForget').onclick = () => { CFG.token = ''; $('sToken').value = ''; LS.set('tg-sync', CFG); setStatus('トークンを消しました'); };
+$('sOk').onclick = async () => {
+  CFG.token = $('sToken').value.trim(); CFG.repo = $('sRepo').value.trim() || CFG.repo; CFG.path = $('sPath').value.trim() || CFG.path;
+  LS.set('tg-sync', CFG); dlg.close();
+  if (!CFG.token) return;
+  setStatus('同期中…');
+  try { await push(); setStatus('同期しました'); } catch(e){ setStatus('同期に失敗：' + e.message, true); }
+};
+
+/* ---------- 起動 ---------- */
+applySettings();
+const draft = LS.get('tg-draft', null);
+if (draft && (draft.title || draft.body) && (!draft.id || !A[draft.id] || A[draft.id].body !== draft.body || (A[draft.id].title || '') !== draft.title)){
+  cur = draft.id && A[draft.id] ? draft.id : null;
+  title.value = draft.title || ''; ed.value = draft.body || '';
+  dirty = true; setStatus('前回の未保存の下書きを復元しました');
+  updateCount(); layout();
+} else if (cur && A[cur]) loadArticle(cur, true);
+else updateCount();
+pull().then(ok => { if (ok && !$('status').textContent) setStatus(CFG.token ? '同期済み' : 'このPCに保存（同期は未設定）'); });
+})();
+</script>
+</body>
+</html>
