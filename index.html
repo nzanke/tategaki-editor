@@ -277,7 +277,10 @@ const allZenDigits = s => s.replace(DIG, m => [...m].map(zd).join(''));
 const TCY = /(?<![0-9０-９])[0-9]{2}(?![0-9０-９])/g;
 function renderMirror(){
   const esc2 = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  $('mirror').innerHTML = esc2(ed.value).replace(TCY, '<span class="tcy">$&</span>') + '​';
+  let h = esc2(ed.value).replace(TCY, '<span class="tcy">$&</span>');
+  // 変換中（未確定）のATOK連数字も、外字のまま化けないように縦中横の数字で描く
+  if (RENMAP){ const r = renRev(); h = h.replace(PUA_G, c => r[c.codePointAt(0)] != null ? `<span class="tcy">${r[c.codePointAt(0)]}</span>` : c); }
+  $('mirror').innerHTML = h + '​';
 }
 // 文字数を変えずに入力欄の数字を整える（カーソル位置はそのまま）
 function normalizeDigits(){
