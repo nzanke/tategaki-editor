@@ -75,7 +75,6 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
   background-repeat:repeat;background-origin:content-box;background-clip:content-box;background-position:right top}
 #ed::selection{background:rgba(47,111,214,.22);color:transparent}
 #ed::placeholder{color:#b0b6bf}
-.plain #ed{color:var(--ink)} .plain #mirror{display:none}
 #historyView{flex:1;overflow:auto;padding:12px;display:none}
 .hbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .hbar input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:6px}
@@ -116,6 +115,7 @@ dialog .note{font-size:12px;color:var(--sub)}
   <div class="toolbar">
     <div class="group"><button id="fMin" class="on">明朝</button><button id="fGo">ゴシック</button></div>
     <label>文字 <input id="fs" type="range" min="14" max="40" step="1"><span id="fsV" class="num"></span></label>
+    <label title="字に対するマス目の大きさ">マス <input id="cell" type="range" min="1" max="1.3" step="0.02"><span id="cellV" class="num"></span></label>
     <label>行間 <input id="lh" type="range" min="1.1" max="2.6" step="0.05"><span id="lhV" class="num"></span></label>
     <label><input id="grid" type="checkbox"> マス目</label>
     <label>線 <select id="gw"><option value="1">細</option><option value="1.5">中</option><option value="2">太</option></select></label>
@@ -191,7 +191,7 @@ const LS = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
 const COLS = 12;
-const DEF = {font:'mincho', fs:22, lh:1.75, grid:true, ruler:true, step:5, kinsoku:false, pZen:true, pBlank:false, pIndent:false, ren:true, gw:1};
+const DEF = {font:'mincho', fs:22, lh:1.75, grid:true, ruler:true, step:5, kinsoku:false, pZen:true, pBlank:false, pIndent:false, ren:true, gw:1, cell:1.1};
 const S = Object.assign({}, DEF, LS.get('tg-settings', {}));
 const CFG = Object.assign({repo:'nzanke/tategaki-editor', path:'data/articles.json', token:''}, LS.get('tg-sync', {}));
 let A = LS.get('tg-articles', {});       // id -> {id,title,body,created,updated,deleted}
@@ -215,28 +215,35 @@ function applySettings(){
   $('step').value = S.step; $('gw').value = String(S.gw);
   $('stage').classList.toggle('noRuler', !S.ruler);
   $('edwrap').classList.toggle('kinsoku', !!S.kinsoku);
-  $('edwrap').classList.toggle('plain', !S.ren);
-  const fs = S.fs, L = Math.round(fs * S.lh);
-  for (const el of [ed, $('mirror')]){
-    el.style.fontSize = fs + 'px';
-    el.style.lineHeight = L + 'px';
-    el.style.height = (16 + 16 + COLS * fs + 1) + 'px';   // +1px は12マス目の下の線を描くため
-  }
+  const {fs, c, gap, L} = metrics();
+  $('cell').value = S.cell; $('cellV').textContent = (+S.cell).toFixed(2);
+  // 入力欄は1マス（c）の大きさで字を並べ、表示用の層は字（fs）を字間 gap を空けてマスの真ん中に描く
+  const H = (16 + 16 + COLS * c + 1) + 'px';   // +1px は12マス目の下の線を描くため
+  ed.style.fontSize = c + 'px'; ed.style.lineHeight = L + 'px'; ed.style.height = H;
+  const m = $('mirror');
+  m.style.fontSize = fs + 'px'; m.style.lineHeight = L + 'px'; m.style.height = H;
+  m.style.letterSpacing = gap + 'px';
+  m.style.paddingTop = (16 + gap / 2) + 'px'; m.style.paddingBottom = (16 - gap / 2) + 'px';
   if (S.grid){
     // 線は画面の1ドット幅（高解像度の画面では0.5px）で、ドットの境目に合わせてぼやけないように描く
     const sw = (+S.gw || 1) / Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
-    const x = Math.round((L - fs) / 2) + sw / 2, y = sw / 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${fs}" shape-rendering="crispEdges"><rect x="${x}" y="${y}" width="${fs}" height="${fs}" fill="none" stroke="#9bdaff" stroke-width="${sw}"/></svg>`;
+    const x = Math.round((L - c) / 2) + sw / 2, y = sw / 2;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${c}" shape-rendering="crispEdges"><rect x="${x}" y="${y}" width="${c}" height="${c}" fill="none" stroke="#9bdaff" stroke-width="${sw}"/></svg>`;
     ed.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-    ed.style.backgroundSize = `${L}px ${fs}px`;
+    ed.style.backgroundSize = `${L}px ${c}px`;
   } else ed.style.backgroundImage = 'none';
   LS.set('tg-settings', S);
   layout();
 }
 
 /* ---------- 幅の自動調整とルーラー ---------- */
+// 字の大きさ fs、1マスの大きさ c、字間 gap、1行の幅 L
+function metrics(){
+  const fs = S.fs, c = Math.max(fs, Math.round(fs * (+S.cell || 1)));
+  return {fs, c, gap: c - fs, L: Math.max(c + 2, Math.round(fs * S.lh))};
+}
 function layout(){
-  const fs = S.fs, L = Math.round(fs * S.lh), pad = 18;
+  const {c: cs, L} = metrics(), pad = 18;
   const sc = $('scroller');
   const minW = sc.clientWidth;
   const fit = Math.max(1, Math.floor((minW - pad * 2) / L));
@@ -261,8 +268,8 @@ function layout(){
   const top = 22 + 1 + 16;
   let c = '';
   for (let i = 1; i <= COLS; i++){
-    const y = top + (i - 0.5) * fs;
-    c += `<i style="top:${top + i * fs}px"></i>`;
+    const y = top + (i - 0.5) * cs;
+    c += `<i style="top:${top + i * cs}px"></i>`;
     if (step === 1 || i % step === 0 || i === 1) c += `<span class="${i % 5 === 0 ? 'major' : ''}" style="top:${y}px">${i}</span>`;
   }
   $('charRuler').innerHTML = c;
@@ -279,7 +286,8 @@ const allZenDigits = s => s.replace(DIG, m => [...m].map(zd).join(''));
 const TCY = /(?<![0-9０-９])[0-9]{2}(?![0-9０-９])/g;
 function renderMirror(){
   const esc2 = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  let h = esc2(ed.value).replace(TCY, '<span class="tcy">$&</span>');
+  let h = esc2(ed.value);
+  if (S.ren) h = h.replace(TCY, '<span class="tcy">$&</span>');
   // 変換中（未確定）のATOK連数字も、外字のまま化けないように縦中横の数字で描く
   if (RENMAP){ const r = renRev(); h = h.replace(PUA_G, c => r[c.codePointAt(0)] != null ? `<span class="tcy">${r[c.codePointAt(0)]}</span>` : c); }
   $('mirror').innerHTML = h + '​';
@@ -589,6 +597,7 @@ $('fs').oninput = e => { S.fs = +e.target.value; applySettings(); };
 $('lh').oninput = e => { S.lh = +e.target.value; applySettings(); };
 $('step').onchange = e => { S.step = +e.target.value; applySettings(); };
 $('gw').onchange = e => { S.gw = +e.target.value; applySettings(); };
+$('cell').oninput = e => { S.cell = +e.target.value; applySettings(); };
 ['grid','ruler','kinsoku','pZen','pBlank','pIndent'].forEach(k => $(k).onchange = e => { S[k] = e.target.checked; applySettings(); });
 $('ren').onchange = e => {
   S.ren = e.target.checked;
