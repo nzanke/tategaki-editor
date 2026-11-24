@@ -33,7 +33,7 @@ article{background:#fff;border:1px solid var(--line);border-radius:10px;padding:
 article h2{font-size:22px;margin:6px 0 6px;line-height:1.5}
 .body{margin-top:20px;font-size:16px;line-height:1.95;letter-spacing:.02em}
 .body p{margin:0}
-.body p.gap{height:1em}
+.body p.gap{height:1.95em}
 .back{display:inline-block;margin-bottom:12px;font-size:14px;color:var(--accent);text-decoration:none}
 .empty{color:var(--sub);text-align:center;padding:40px 0}
 </style>
@@ -102,7 +102,8 @@ function showArticle(id){
   const a = ART.find(x => x.id === id);
   if (!a) return showList(null);
   renderCats(a.category || '');
-  const paras = toHan(a.body || '').split('\n').map(p => p.trim() === '' ? '<p class="gap"></p>' : `<p>${esc(p)}</p>`).join('');
+  const paras = toHan(a.body || '').replace(/\n/g, '\n\n').split('\n')   // 横書きでは改行を倍に
+   .map(p => p.trim() === '' ? '<p class="gap"></p>' : `<p>${esc(p)}</p>`).join('');
   $('main').innerHTML = `<a class="back" href="#c=${esc(a.category || '')}">← ${esc(a.category || '未分類')}の一覧へ</a>
     <article><div class="meta">${a.category ? `<span class="tag">${esc(a.category)}</span>` : ''}${fmt(a.updated)}</div>
     <h2>${esc(toHan(a.title || '無題'))}</h2><div class="body">${paras}</div></article>`;

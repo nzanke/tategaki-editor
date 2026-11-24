@@ -577,7 +577,7 @@ async function copyText(s, label){
   catch(e){ const t = document.createElement('textarea'); t.value = s; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
   setStatus(label + 'でコピーしました');
 }
-$('btnCopyH').onclick = () => copyText(toHanAll(ed.value), '横書き用');
+$('btnCopyH').onclick = () => copyText(toHanAll(ed.value).replace(/\n/g, '\n\n'), '横書き用');   // 横書きでは改行を倍に
 $('btnCopyV').onclick = () => copyText(toAtok(renSuji(toZen(ed.value))), RENMAP ? '縦書き用（ATOK連数字）' : '縦書き用');
 const dlgRen = $('dlgRen');
 $('btnRenReg').onclick = () => { $('renIn').value = ''; $('renOut').textContent = renSummary(); dlgRen.showModal(); $('renIn').focus(); };
