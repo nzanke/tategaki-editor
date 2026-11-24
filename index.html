@@ -179,7 +179,7 @@ function applySettings(){
   const fs = S.fs, L = Math.round(fs * S.lh);
   ed.style.fontSize = fs + 'px';
   ed.style.lineHeight = L + 'px';
-  ed.style.height = (16 + 16 + COLS * fs) + 'px';
+  ed.style.height = (16 + 16 + COLS * fs + 1) + 'px';   // +1px は12マス目の下の線を描くため
   if (S.grid){
     const x = ((L - fs) / 2).toFixed(2);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${fs}"><rect x="${x}" y="0.5" width="${fs}" height="${fs}" fill="none" stroke="#a9c9ee" stroke-width="1"/></svg>`;
