@@ -126,6 +126,7 @@ dialog .note{font-size:12px;color:var(--sub)}
     <label title="貼り付け時に段落の頭を一字下げます"><input id="pIndent" type="checkbox"> 段落頭を下げる</label>
     <label title="2桁の数字を1マスの縦中横（連数字）にします"><input id="ren" type="checkbox"> 連数字</label>
     <button id="btnZen" title="本文の半角英数をすべて全角にする（連数字はそのまま）">本文を全角化</button>
+    <button id="btnRenReg" title="ATOKの連数字（外字）を登録して変換できるようにする">ATOK連数字の登録</button>
     <button id="btnCopyH" title="数字・英字を半角にしてコピー">横書きにコピー</button>
     <button id="btnCopyV" title="2桁の数字を連数字（半角）、ほかを全角にしてコピー">縦書きにコピー</button>
   </div>
@@ -164,6 +165,20 @@ dialog .note{font-size:12px;color:var(--sub)}
     <span class="spacer"></span>
     <button id="sClose">閉じる</button>
     <button id="sOk" class="primary">保存して同期</button>
+  </div>
+</dialog>
+
+<dialog id="dlgRen">
+  <h2>ATOKの連数字を登録する</h2>
+  <p class="note">ATOK（U-PRESS版）の連数字は外字の1文字です。下の欄に「普通の数字2桁」に続けて「ATOKの連数字」を打ってください。区切りの記号やスペースはあってもなくてもかまいません。打った文字はマスの形（豆腐）で見えることがありますが、問題ありません。</p>
+  <p class="note">例：10［10の連数字］11［11の連数字］… 99［99の連数字］<br>全部打たなくても、たとえば 10 と 99 のように両端を登録すると、その間は文字番号が連続していれば自動で埋めます（連続していない場合は登録した分だけ使います）。</p>
+  <textarea id="renIn" style="width:100%;height:110px;font-size:16px;padding:8px;border:1px solid var(--line);border-radius:6px"></textarea>
+  <div id="renOut" class="note" style="margin-top:8px;white-space:pre-wrap;font-family:var(--num)"></div>
+  <div class="row">
+    <button id="renClear">登録を消す</button>
+    <span class="spacer"></span>
+    <button id="renClose">閉じる</button>
+    <button id="renOk" class="primary">読み取って登録</button>
   </div>
 </dialog>
 
@@ -266,11 +281,45 @@ function renderMirror(){
 }
 // 文字数を変えずに入力欄の数字を整える（カーソル位置はそのまま）
 function normalizeDigits(){
-  if (!S.ren) return;
-  const v = ed.value, n = renSuji(v);
-  if (n === v) return;
-  const a = ed.selectionStart, b = ed.selectionEnd;
+  let v = ed.value, a = ed.selectionStart, b = ed.selectionEnd;
+  if (RENMAP && PUA_RE.test(v)){            // ATOKの連数字（外字）を打った／貼った → 数字2桁に
+    const x = fromAtok(v.slice(0, a)), y = fromAtok(v.slice(a, b)), z = fromAtok(v.slice(b));
+    v = x + y + z; a = x.length; b = a + y.length;
+  }
+  const n = S.ren ? renSuji(v) : v;
+  if (n === ed.value) return;
   ed.value = n; ed.setSelectionRange(a, b);
+}
+
+/* ---------- ATOKの連数字（U-PRESSの外字） ---------- */
+let RENMAP = LS.get('tg-renmap', null);   // {"10": 文字番号, ...}
+const PUA_RE = /[\uE000-\uF8FF]|[\u{F0000}-\u{FFFFD}]/u;
+const PUA_G = /[\uE000-\uF8FF]|[\u{F0000}-\u{FFFFD}]/gu;
+function renRev(){ const r = {}; if (RENMAP) for (const k in RENMAP) r[RENMAP[k]] = k; return r; }
+const fromAtok = s => { if (!RENMAP) return s; const r = renRev(); return s.replace(PUA_G, c => r[c.codePointAt(0)] ?? c); };
+const toAtok = s => RENMAP ? s.replace(TCY, m => RENMAP[m] != null ? String.fromCodePoint(RENMAP[m]) : m) : s;
+function learnRen(text){
+  const smp = {};
+  const re = /([0-9０-９])([0-9０-９])[\s=＝:：、,［\[（(]*([\uE000-\uF8FF]|[\u{F0000}-\u{FFFFD}])/gu;
+  let m;
+  while ((m = re.exec(text))) smp[hd(m[1]) + hd(m[2])] = m[3].codePointAt(0);
+  const keys = Object.keys(smp).sort();
+  if (!keys.length) return {map:null, msg:'外字の文字が見つかりませんでした。数字2桁のあとにATOKの連数字を打ってください。'};
+  const map = Object.assign({}, smp);
+  // 登録した点どうしの文字番号が数字の差と同じだけ離れていれば、その間を埋める
+  let filled = 0;
+  for (let i = 0; i + 1 < keys.length; i++){
+    const n1 = +keys[i], n2 = +keys[i + 1], c1 = smp[keys[i]], c2 = smp[keys[i + 1]];
+    if (c2 - c1 === n2 - n1) for (let n = n1 + 1; n < n2; n++){ const k = String(n).padStart(2, '0'); if (map[k] == null){ map[k] = c1 + (n - n1); filled++; } }
+  }
+  const hex = c => 'U+' + c.toString(16).toUpperCase();
+  const lines = keys.map(k => `${k} → ${hex(smp[k])}`).join('\n');
+  return {map, msg:`読み取った連数字：${keys.length}個\n${lines}\n${filled ? `間を自動で埋めた数：${filled}個\n` : ''}登録された数字：${Object.keys(map).length}個（${Object.keys(map).sort()[0]}〜${Object.keys(map).sort().slice(-1)[0]}）`};
+}
+function renSummary(){
+  if (!RENMAP) return 'まだ登録されていません。';
+  const ks = Object.keys(RENMAP).sort(), hex = c => 'U+' + c.toString(16).toUpperCase();
+  return `登録済み：${ks.length}個（${ks[0]} = ${hex(RENMAP[ks[0]])} 〜 ${ks.slice(-1)[0]} = ${hex(RENMAP[ks.slice(-1)[0]])}）`;
 }
 
 function countText(s){
@@ -293,7 +342,7 @@ ed.addEventListener('paste', e => {
   const t = (e.clipboardData || window.clipboardData).getData('text/plain');
   if (t == null) return;
   e.preventDefault();
-  let s = t.replace(/\r\n?/g, '\n').replace(/[ \t ]+$/gm, '');
+  let s = fromAtok(t).replace(/\r\n?/g, '\n').replace(/[ \t ]+$/gm, '');
   if (S.pBlank) s = s.replace(/\n[ \t　]*\n+/g, '\n');
   if (S.pZen) s = toZen(s);
   if (S.pIndent) s = s.split('\n').map(p => (p === '' || /^[　「『（〈《【〔"“]/.test(p)) ? p : '　' + p.replace(/^[ \t]+/, '')).join('\n');
@@ -389,7 +438,11 @@ async function fetchRemote(){
   if (!r.ok) throw new Error('読み込み ' + r.status);
   const j = await r.json();
   let data = {}, cats = null, catsAt = '';
-  try { const d = JSON.parse(b64dec(j.content)); data = d.articles || {}; cats = d.categories || null; catsAt = d.categoriesUpdated || ''; } catch(e){}
+  try {
+    const d = JSON.parse(b64dec(j.content)); data = d.articles || {}; cats = d.categories || null; catsAt = d.categoriesUpdated || '';
+    // ATOK連数字の登録は新しく変えた方を採用
+    if ((d.renmapUpdated || '') > (LS.get('tg-renmap-at', '') || '')) { RENMAP = d.renmap || null; LS.set('tg-renmap', RENMAP); LS.set('tg-renmap-at', d.renmapUpdated); }
+  } catch(e){}
   return {data, sha:j.sha, cats, catsAt};
 }
 function merge(remote, cats, catsAt){
@@ -413,7 +466,7 @@ async function push(){
   for (let i = 0; i < 3; i++){
     const {data, sha, cats, catsAt} = await fetchRemote();
     merge(data, cats, catsAt); saveLocal(); renderCats();
-    const body = JSON.stringify({categories:CATS, categoriesUpdated:LS.get('tg-cats-at', ''), articles:A}, null, 1);
+    const body = JSON.stringify({categories:CATS, categoriesUpdated:LS.get('tg-cats-at', ''), renmap:RENMAP, renmapUpdated:LS.get('tg-renmap-at', ''), articles:A}, null, 1);
     const r = await api('', {method:'PUT', body:JSON.stringify({message:'記事を保存', content:b64enc(body), sha:sha || undefined})});
     if (r.ok) return;
     if (r.status === 409 || r.status === 422) continue;   // 別のPCと同時に保存した → 取り直して再試行
@@ -505,7 +558,24 @@ async function copyText(s, label){
   setStatus(label + 'でコピーしました');
 }
 $('btnCopyH').onclick = () => copyText(toHanAll(ed.value), '横書き用');
-$('btnCopyV').onclick = () => copyText(renSuji(toZen(ed.value)), '縦書き用');
+$('btnCopyV').onclick = () => copyText(toAtok(renSuji(toZen(ed.value))), RENMAP ? '縦書き用（ATOK連数字）' : '縦書き用');
+const dlgRen = $('dlgRen');
+$('btnRenReg').onclick = () => { $('renIn').value = ''; $('renOut').textContent = renSummary(); dlgRen.showModal(); $('renIn').focus(); };
+$('renClose').onclick = () => dlgRen.close();
+$('renClear').onclick = async () => {
+  if (!confirm('ATOK連数字の登録を消しますか？')) return;
+  RENMAP = null; LS.set('tg-renmap', null); LS.set('tg-renmap-at', new Date().toISOString());
+  $('renOut').textContent = renSummary();
+  if (CFG.token) try { await push(); } catch(e){}
+};
+$('renOk').onclick = async () => {
+  const r = learnRen($('renIn').value);
+  if (!r.map){ $('renOut').textContent = r.msg; return; }
+  RENMAP = Object.assign({}, RENMAP || {}, r.map);
+  LS.set('tg-renmap', RENMAP); LS.set('tg-renmap-at', new Date().toISOString());
+  $('renOut').textContent = r.msg + '\n\n' + renSummary();
+  if (CFG.token) try { await push(); $('renOut').textContent += '\nほかのPCにも共有しました。'; } catch(e){}
+};
 
 /* ---------- ツールバー ---------- */
 $('fMin').onclick = () => { S.font = 'mincho'; applySettings(); };
