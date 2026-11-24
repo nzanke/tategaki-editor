@@ -118,7 +118,7 @@ dialog .note{font-size:12px;color:var(--sub)}
     <label>文字 <input id="fs" type="range" min="14" max="40" step="1"><span id="fsV" class="num"></span></label>
     <label>行間 <input id="lh" type="range" min="1.1" max="2.6" step="0.05"><span id="lhV" class="num"></span></label>
     <label><input id="grid" type="checkbox"> マス目</label>
-    <label>線 <select id="gw"><option value="1">細</option><option value="2">中</option><option value="3">太</option></select></label>
+    <label>線 <select id="gw"><option value="1">細</option><option value="1.5">中</option><option value="2">太</option></select></label>
     <label><input id="ruler" type="checkbox"> ルーラー</label>
     <label>目盛り <select id="step"><option value="1">1</option><option value="5">5</option><option value="10">10</option></select></label>
     <label title="オフのときは12字ちょうどで折り返し、句読点も行頭に来ます"><input id="kinsoku" type="checkbox"> 禁則処理</label>
@@ -211,7 +211,8 @@ function applySettings(){
   $('fs').value = S.fs; $('fsV').textContent = S.fs + 'px';
   $('lh').value = S.lh; $('lhV').textContent = (+S.lh).toFixed(2);
   ['grid','ruler','kinsoku','pZen','pBlank','pIndent','ren'].forEach(k => $(k).checked = !!S[k]);
-  $('step').value = S.step; $('gw').value = S.gw;
+  if (![1, 1.5, 2].includes(+S.gw)) S.gw = 2;   // 以前の「太」(3) は今の「太」に
+  $('step').value = S.step; $('gw').value = String(S.gw);
   $('stage').classList.toggle('noRuler', !S.ruler);
   $('edwrap').classList.toggle('kinsoku', !!S.kinsoku);
   $('edwrap').classList.toggle('plain', !S.ren);
