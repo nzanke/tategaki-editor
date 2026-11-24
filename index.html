@@ -58,16 +58,24 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 #charRuler span.major{color:var(--accent);font-weight:700}
 #charRuler i{position:absolute;right:0;width:6px;border-top:1px solid #c7ced8}
 .noRuler #lineRuler,.noRuler #charRuler{display:none}
-#ed{
-  display:block;writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;
+.edwrap{position:relative}
+.edtext{
+  display:block;writing-mode:vertical-rl;-webkit-writing-mode:vertical-rl;text-orientation:mixed;
   border:0;outline:0;resize:none;overflow:hidden;margin:0;
   padding:16px 18px;background-color:transparent;color:var(--ink);
-  background-repeat:repeat;background-origin:content-box;background-clip:content-box;background-position:right top;
   letter-spacing:0;font-kerning:none;font-feature-settings:normal;white-space:pre-wrap;word-break:break-all;line-break:anywhere;overflow-wrap:anywhere;
 }
-#ed.kinsoku{line-break:strict;word-break:normal;overflow-wrap:normal}
-.mincho #ed{font-family:"BIZ UDMincho",serif}
-.gothic #ed{font-family:"BIZ UDGothic",sans-serif}
+.kinsoku .edtext{line-break:strict;word-break:normal;overflow-wrap:normal}
+.mincho .edtext{font-family:"BIZ UDMincho",serif}
+.gothic .edtext{font-family:"BIZ UDGothic",sans-serif}
+/* 文字は下の #mirror が描き、上の入力欄（#ed）は透明にしてカーソルと選択だけを見せる */
+#mirror{position:absolute;left:0;top:0;pointer-events:none}
+#mirror .tcy{text-combine-upright:all;-webkit-text-combine:horizontal}
+#ed{position:relative;color:transparent;caret-color:var(--ink);
+  background-repeat:repeat;background-origin:content-box;background-clip:content-box;background-position:right top}
+#ed::selection{background:rgba(47,111,214,.22);color:transparent}
+#ed::placeholder{color:#b0b6bf}
+.plain #ed{color:var(--ink)} .plain #mirror{display:none}
 #historyView{flex:1;overflow:auto;padding:12px;display:none}
 .hbar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .hbar input{flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:6px}
@@ -116,7 +124,10 @@ dialog .note{font-size:12px;color:var(--sub)}
     <label title="貼り付け時に半角英数を全角にします"><input id="pZen" type="checkbox"> 貼付時に全角化</label>
     <label title="貼り付け時に空行を詰めます"><input id="pBlank" type="checkbox"> 空行を詰める</label>
     <label title="貼り付け時に段落の頭を一字下げます"><input id="pIndent" type="checkbox"> 段落頭を下げる</label>
-    <button id="btnZen" title="本文の半角英数をすべて全角にする">本文を全角化</button>
+    <label title="2桁の数字を1マスの縦中横（連数字）にします"><input id="ren" type="checkbox"> 連数字</label>
+    <button id="btnZen" title="本文の半角英数をすべて全角にする（連数字はそのまま）">本文を全角化</button>
+    <button id="btnCopyH" title="数字・英字を半角にしてコピー">横書きにコピー</button>
+    <button id="btnCopyV" title="2桁の数字を連数字（半角）、ほかを全角にしてコピー">縦書きにコピー</button>
   </div>
   <div id="titleRow">
     <input id="title" type="text" placeholder="タイトル">
@@ -124,7 +135,7 @@ dialog .note{font-size:12px;color:var(--sub)}
   </div>
   <div id="catRow"></div>
   <div class="stage" id="stage">
-    <div id="scroller"><div id="inner"><div id="lineRuler"></div><textarea id="ed" spellcheck="false" placeholder="ここに本文"></textarea></div></div>
+    <div id="scroller"><div id="inner"><div id="lineRuler"></div><div class="edwrap" id="edwrap"><div id="mirror" class="edtext" aria-hidden="true"></div><textarea id="ed" class="edtext" spellcheck="false" placeholder="ここに本文"></textarea></div></div></div>
     <div id="charRuler"></div>
   </div>
 </section>
@@ -164,7 +175,7 @@ const LS = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
 const COLS = 12;
-const DEF = {font:'mincho', fs:22, lh:1.75, grid:true, ruler:true, step:5, kinsoku:false, pZen:true, pBlank:false, pIndent:false};
+const DEF = {font:'mincho', fs:22, lh:1.75, grid:true, ruler:true, step:5, kinsoku:false, pZen:true, pBlank:false, pIndent:false, ren:true};
 const S = Object.assign({}, DEF, LS.get('tg-settings', {}));
 const CFG = Object.assign({repo:'nzanke/tategaki-editor', path:'data/articles.json', token:''}, LS.get('tg-sync', {}));
 let A = LS.get('tg-articles', {});       // id -> {id,title,body,created,updated,deleted}
@@ -183,17 +194,22 @@ function applySettings(){
   $('fGo').classList.toggle('on', S.font === 'gothic');
   $('fs').value = S.fs; $('fsV').textContent = S.fs + 'px';
   $('lh').value = S.lh; $('lhV').textContent = (+S.lh).toFixed(2);
-  ['grid','ruler','kinsoku','pZen','pBlank','pIndent'].forEach(k => $(k).checked = !!S[k]);
+  ['grid','ruler','kinsoku','pZen','pBlank','pIndent','ren'].forEach(k => $(k).checked = !!S[k]);
   $('step').value = S.step;
   $('stage').classList.toggle('noRuler', !S.ruler);
-  ed.classList.toggle('kinsoku', !!S.kinsoku);
+  $('edwrap').classList.toggle('kinsoku', !!S.kinsoku);
+  $('edwrap').classList.toggle('plain', !S.ren);
   const fs = S.fs, L = Math.round(fs * S.lh);
-  ed.style.fontSize = fs + 'px';
-  ed.style.lineHeight = L + 'px';
-  ed.style.height = (16 + 16 + COLS * fs + 1) + 'px';   // +1px は12マス目の下の線を描くため
+  for (const el of [ed, $('mirror')]){
+    el.style.fontSize = fs + 'px';
+    el.style.lineHeight = L + 'px';
+    el.style.height = (16 + 16 + COLS * fs + 1) + 'px';   // +1px は12マス目の下の線を描くため
+  }
   if (S.grid){
-    const x = ((L - fs) / 2).toFixed(2);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${fs}"><rect x="${x}" y="0.5" width="${fs}" height="${fs}" fill="none" stroke="#a9c9ee" stroke-width="1"/></svg>`;
+    // 線は画面の1ドット幅（高解像度の画面では0.5px）で、ドットの境目に合わせてぼやけないように描く
+    const sw = 1 / Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
+    const x = Math.round((L - fs) / 2) + sw / 2, y = sw / 2;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${fs}" shape-rendering="crispEdges"><rect x="${x}" y="${y}" width="${fs}" height="${fs}" fill="none" stroke="#cfe1f6" stroke-width="${sw}"/></svg>`;
     ed.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
     ed.style.backgroundSize = `${L}px ${fs}px`;
   } else ed.style.backgroundImage = 'none';
@@ -210,7 +226,7 @@ function layout(){
   const n = countText(ed.value).lines;
   const used = S.kinsoku ? Math.ceil(n * 1.1) + 1 : n;   // 禁則ありは追い出しで行が増える分の余裕
   const w = Math.max(fit, used + 2) * L + pad * 2;       // 書き足し用に2行ぶん余白
-  ed.style.width = w + 'px';
+  ed.style.width = w + 'px'; $('mirror').style.width = w + 'px';
   $('inner').style.width = w + 'px';
   if (!S.ruler) return;
   // 行番号（右から）
@@ -236,7 +252,29 @@ function layout(){
 }
 
 /* ---------- 字数・行数 ---------- */
+/* ---------- 連数字 ---------- */
+// 2桁ちょうどの数字の並び → 半角（1マスの縦中横で表示）、1桁や3桁以上 → 全角（1字1マス）
+const DIG = /[0-9０-９]+/g;
+const zd = c => c >= '0' && c <= '9' ? String.fromCharCode(c.charCodeAt(0) + 0xFEE0) : c;
+const hd = c => c >= '０' && c <= '９' ? String.fromCharCode(c.charCodeAt(0) - 0xFEE0) : c;
+const renSuji = s => s.replace(DIG, m => m.length === 2 ? [...m].map(hd).join('') : [...m].map(zd).join(''));
+const allZenDigits = s => s.replace(DIG, m => [...m].map(zd).join(''));
+const TCY = /(?<![0-9０-９])[0-9]{2}(?![0-9０-９])/g;
+function renderMirror(){
+  const esc2 = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  $('mirror').innerHTML = esc2(ed.value).replace(TCY, '<span class="tcy">$&</span>') + '​';
+}
+// 文字数を変えずに入力欄の数字を整える（カーソル位置はそのまま）
+function normalizeDigits(){
+  if (!S.ren) return;
+  const v = ed.value, n = renSuji(v);
+  if (n === v) return;
+  const a = ed.selectionStart, b = ed.selectionEnd;
+  ed.value = n; ed.setSelectionRange(a, b);
+}
+
 function countText(s){
+  if (S.ren) s = s.replace(TCY, '＃');   // 連数字は1マス
   const paras = s.split('\n');
   let lines = 0, chars = 0;
   for (const p of paras){ const n = [...p].length; chars += n; lines += Math.max(1, Math.ceil(n / COLS)); }
@@ -244,6 +282,7 @@ function countText(s){
   return {lines, chars};
 }
 function updateCount(){
+  renderMirror();
   const {lines, chars} = countText(ed.value);
   $('count').textContent = `${COLS}字×${lines}行（${chars}字）`;
 }
@@ -264,9 +303,10 @@ ed.addEventListener('paste', e => {
 
 /* ---------- 入力 ---------- */
 let draftTimer;
-function onInput(){
+function onInput(e){
   dirty = true; setStatus('未保存');
-  updateCount(); layout(); followCaret();
+  if (!(e && e.isComposing)) normalizeDigits();   // 変換中は触らない
+  renderMirror(); updateCount(); layout(); followCaret();
   clearTimeout(draftTimer);
   draftTimer = setTimeout(() => LS.set('tg-draft', {id:cur, title:title.value, body:ed.value}), 400);
 }
@@ -275,6 +315,7 @@ function followCaret(){
   if (sc.scrollWidth > sc.clientWidth && ed.selectionEnd >= ed.value.length - 1) sc.scrollLeft = -sc.scrollWidth;
 }
 ed.addEventListener('input', onInput);
+ed.addEventListener('compositionend', () => onInput());
 title.addEventListener('input', () => { dirty = true; setStatus('未保存'); LS.set('tg-draft', {id:cur, title:title.value, body:ed.value}); });
 
 /* ---------- 保存・同期 ---------- */
@@ -456,6 +497,15 @@ $('btnTxt').onclick = () => {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
 };
 $('btnZen').onclick = () => { ed.value = toZen(ed.value); onInput(); };
+// 横書き用：数字・英字を半角に／縦書き用：2桁の数字だけ半角（連数字）、ほかは全角
+const toHanAll = s => s.replace(/[！-～]/g, c => /[０-９Ａ-Ｚａ-ｚ％＋＝＆＠＃．，：－／]/.test(c) ? String.fromCharCode(c.charCodeAt(0) - 0xFEE0) : c);
+async function copyText(s, label){
+  try { await navigator.clipboard.writeText(s); }
+  catch(e){ const t = document.createElement('textarea'); t.value = s; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+  setStatus(label + 'でコピーしました');
+}
+$('btnCopyH').onclick = () => copyText(toHanAll(ed.value), '横書き用');
+$('btnCopyV').onclick = () => copyText(renSuji(toZen(ed.value)), '縦書き用');
 
 /* ---------- ツールバー ---------- */
 $('fMin').onclick = () => { S.font = 'mincho'; applySettings(); };
@@ -464,6 +514,13 @@ $('fs').oninput = e => { S.fs = +e.target.value; applySettings(); };
 $('lh').oninput = e => { S.lh = +e.target.value; applySettings(); };
 $('step').onchange = e => { S.step = +e.target.value; applySettings(); };
 ['grid','ruler','kinsoku','pZen','pBlank','pIndent'].forEach(k => $(k).onchange = e => { S[k] = e.target.checked; applySettings(); });
+$('ren').onchange = e => {
+  S.ren = e.target.checked;
+  const a = ed.selectionStart, b = ed.selectionEnd;
+  ed.value = S.ren ? renSuji(ed.value) : allZenDigits(ed.value);
+  ed.setSelectionRange(a, b);
+  applySettings(); updateCount(); layout();
+};
 window.addEventListener('resize', layout);
 if (document.fonts) document.fonts.ready.then(layout);
 
