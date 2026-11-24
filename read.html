@@ -41,14 +41,15 @@ article h2{font-size:22px;margin:6px 0 6px;line-height:1.5}
 .exp button:hover{border-color:#b9c2cf}
 .rowx{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 #printArea{display:none}
-@page{size:A4;margin:18mm 20mm}
+@page{size:A4;margin:18mm 20mm;@bottom-center{content:counter(page);font-family:"UD英数","BIZ UDGothic",sans-serif;font-size:9pt;color:#555}}
 @media print{
   header,main{display:none!important}
   body{background:#fff}
   #printArea{display:block}
   #printArea article{border:0;padding:0;border-radius:0;break-after:page}
   #printArea article:last-child{break-after:auto}
-  #printArea h2{font-size:16pt}
+  #printArea .meta{display:none}
+  #printArea h2{font-size:16pt;margin-top:0}
   #printArea .body{font-size:11pt;line-height:1.9}
   #printArea .tag{border:1px solid #9cb8e6}
 }
