@@ -209,7 +209,7 @@ function applySettings(){
     // 線は画面の1ドット幅（高解像度の画面では0.5px）で、ドットの境目に合わせてぼやけないように描く
     const sw = 1 / Math.min(2, Math.max(1, Math.round(window.devicePixelRatio || 1)));
     const x = Math.round((L - fs) / 2) + sw / 2, y = sw / 2;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${fs}" shape-rendering="crispEdges"><rect x="${x}" y="${y}" width="${fs}" height="${fs}" fill="none" stroke="#cfe1f6" stroke-width="${sw}"/></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${L}" height="${fs}" shape-rendering="crispEdges"><rect x="${x}" y="${y}" width="${fs}" height="${fs}" fill="none" stroke="#bcd5f2" stroke-width="${sw}"/></svg>`;
     ed.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
     ed.style.backgroundSize = `${L}px ${fs}px`;
   } else ed.style.backgroundImage = 'none';
